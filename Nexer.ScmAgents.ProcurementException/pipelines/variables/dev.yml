@@ -1,0 +1,23 @@
+# Shared pipeline variables — dev environment.
+# Secrets (e.g. SWA_DEPLOYMENT_TOKEN) live in the 'scm-agents-dev' variable
+# group in Azure DevOps Library, NOT in this file.
+
+variables:
+  # Azure DevOps service connection (ARM, workload identity federation recommended)
+  azureServiceConnection: 'sc-scmagents-dev'
+
+  # Target Azure environment
+  resourceGroupName: 'rg-scmagents-dev'
+  location: 'westeurope'
+
+  # Resource names — must match the naming convention in infra/main.bicep
+  functionAppName: 'func-scmagents-dev'
+  staticWebAppName: 'stapp-scmagents-dev'
+
+  # Repo layout
+  apiProjectDir: 'Nexer.ScmAgents.ProcurementException'
+  webProjectDir: 'Nexer.ScmAgents.ProcurementException.Web'
+
+  # Toolchain
+  pythonVersion: '3.12'
+  nodeVersion: '20.x'

@@ -1,0 +1,247 @@
+# =============================================================================
+# Nexer SCM AI Agents — Procurement Agent
+# CI/CD pipeline (Azure DevOps)
+#
+# Stages:
+#   1. Build        — package Function App, build React UI, compile Bicep → ARM
+#   2. DeployInfra  — deploy infra/main.bicep to the target resource group
+#   3. DeployApi    — zip-deploy the Function App (remote build on Flex)
+#   4. DeployWeb    — publish the React build to Azure Static Web Apps
+#
+# One-time setup (see DeploymentGuide/DEPLOYMENT_GUIDE.md):
+#   - Service connection 'sc-scmagents-dev' (ARM, workload identity federation)
+#   - Variable group 'scm-agents-dev' with secret SWA_DEPLOYMENT_TOKEN
+#   - Environment 'scm-agents-dev' (add approval gates here if desired)
+# =============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - Nexer.ScmAgents.ProcurementException/*
+      - Nexer.ScmAgents.ProcurementException.Web/*
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - template: variables/dev.yml
+  - group: scm-agents-dev
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+
+stages:
+  # ===========================================================================
+  - stage: Build
+    displayName: 'Build & package'
+    jobs:
+      # --- Function App package -------------------------------------------
+      - job: BuildFunctionApp
+        displayName: 'Package Function App (Python)'
+        steps:
+          - task: UsePythonVersion@0
+            displayName: 'Use Python $(pythonVersion)'
+            inputs:
+              versionSpec: '$(pythonVersion)'
+
+          - script: |
+              python -m compileall function_app.py src
+            workingDirectory: '$(apiProjectDir)'
+            displayName: 'Syntax check (compileall)'
+
+          # Only runtime files go into the package. Dependencies are restored
+          # by the remote build on the Flex Consumption plan (from requirements.txt).
+          - task: CopyFiles@2
+            displayName: 'Stage app files'
+            inputs:
+              SourceFolder: '$(apiProjectDir)'
+              Contents: |
+                function_app.py
+                host.json
+                requirements.txt
+                src/**
+                prompts/**
+                contracts/**
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/functionapp'
+
+          - task: ArchiveFiles@2
+            displayName: 'Zip Function App'
+            inputs:
+              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/functionapp'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/functionapp.zip'
+            artifact: 'functionapp'
+            displayName: 'Publish Function App artifact'
+
+      # --- React UI ----------------------------------------------------------
+      - job: BuildWeb
+        displayName: 'Build React UI (Vite)'
+        steps:
+          - task: NodeTool@0
+            displayName: 'Use Node $(nodeVersion)'
+            inputs:
+              versionSpec: '$(nodeVersion)'
+
+          - script: |
+              npm ci
+              npm run build
+            workingDirectory: '$(webProjectDir)'
+            displayName: 'npm ci + build'
+
+          - publish: '$(webProjectDir)/dist'
+            artifact: 'web'
+            displayName: 'Publish web artifact'
+
+      # --- Infra: compile Bicep → ARM and publish definitions ---------------
+      - job: BuildInfra
+        displayName: 'Compile Bicep → ARM'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'az bicep build'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az bicep build \
+                  --file $(apiProjectDir)/infra/main.bicep \
+                  --outdir $(Build.ArtifactStagingDirectory)/arm
+
+          - task: CopyFiles@2
+            displayName: 'Stage Bicep sources + parameters'
+            inputs:
+              SourceFolder: '$(apiProjectDir)/infra'
+              Contents: '**'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/infra'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/infra'
+            artifact: 'infra'
+            displayName: 'Publish infra artifact'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/arm'
+            artifact: 'arm-templates'
+            displayName: 'Publish compiled ARM templates'
+
+  # ===========================================================================
+  - stage: DeployInfra
+    displayName: 'Deploy infrastructure (Bicep)'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables.isMain, 'true'))
+    jobs:
+      - deployment: DeployBicep
+        displayName: 'az deployment group create'
+        environment: 'scm-agents-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: 'infra'
+
+                - task: AzureCLI@2
+                  displayName: 'What-if (preview changes)'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment group what-if \
+                        --resource-group $(resourceGroupName) \
+                        --template-file $(Pipeline.Workspace)/infra/main.bicep \
+                        --parameters $(Pipeline.Workspace)/infra/main.parameters.dev.json
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy main.bicep'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment group create \
+                        --name "scm-agents-$(Build.BuildId)" \
+                        --resource-group $(resourceGroupName) \
+                        --template-file $(Pipeline.Workspace)/infra/main.bicep \
+                        --parameters $(Pipeline.Workspace)/infra/main.parameters.dev.json
+
+  # ===========================================================================
+  - stage: DeployApi
+    displayName: 'Deploy Function App'
+    dependsOn: DeployInfra
+    condition: and(succeeded(), eq(variables.isMain, 'true'))
+    jobs:
+      - deployment: DeployFunctions
+        displayName: 'Zip deploy (remote build)'
+        environment: 'scm-agents-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: 'functionapp'
+
+                - task: AzureCLI@2
+                  displayName: 'az functionapp deployment (flex, remote build)'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az functionapp deployment source config-zip \
+                        --resource-group $(resourceGroupName) \
+                        --name $(functionAppName) \
+                        --src $(Pipeline.Workspace)/functionapp/functionapp.zip \
+                        --build-remote true
+
+                - task: AzureCLI@2
+                  displayName: 'Smoke test: GET /api/health'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      HOST=$(az functionapp show \
+                        --resource-group $(resourceGroupName) \
+                        --name $(functionAppName) \
+                        --query defaultHostName -o tsv)
+                      for i in $(seq 1 10); do
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$HOST/api/health" || true)
+                        echo "Attempt $i: /api/health -> $STATUS"
+                        [ "$STATUS" = "200" ] && exit 0
+                        sleep 15
+                      done
+                      echo "Health check failed" && exit 1
+
+  # ===========================================================================
+  - stage: DeployWeb
+    displayName: 'Deploy Static Web App'
+    dependsOn: DeployApi
+    condition: and(succeeded(), eq(variables.isMain, 'true'))
+    jobs:
+      - deployment: DeploySwa
+        displayName: 'Publish UI to SWA'
+        environment: 'scm-agents-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: 'web'
+
+                - task: AzureStaticWebApp@0
+                  displayName: 'Upload prebuilt UI'
+                  inputs:
+                    workingDirectory: '$(Pipeline.Workspace)'
+                    app_location: 'web'
+                    skip_app_build: true
+                    skip_api_build: true
+                    azure_static_web_apps_api_token: '$(SWA_DEPLOYMENT_TOKEN)'

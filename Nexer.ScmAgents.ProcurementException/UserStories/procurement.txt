@@ -1,0 +1,135 @@
+Detailed User Stories (Functional Capability Version) 
+Procurement Agent 
+Persona: Buyer 
+PROC-01 – Overdue PO Impact Prioritization (Inventory Coverage) 
+• User Story 
+As a Buyer, I want the agent to rank overdue PO lines by inventory coverage risk 
+so that I focus on the delays that will cause stockouts first. 
+• Expected Behavior 
+• Agent starts from the overdue PO result set (PROC-01) and enriches each 
+line with item/site/warehouse. 
+• Retrieves on-hand and available inventory (by site/warehouse) and open 
+demand (sales orders, production consumption, transfer demand) via 
+supported D365 APIs/entities. 
+• Calculates a demo-grade “days of cover” / “runout date” using deterministic 
+rules (documented formula), and labels each overdue PO line as Critical / 
+High / Medium / Low. 
+• Outputs a prioritized list showing: PO, vendor, item, due date, days late, 
+projected runout date, and risk level, plus a short explanation (“why 
+critical”). 
+• Acceptance Criteria 
+• All data retrieval is API/entity-based (no SQL, no ERP customization). 
+9 
+Nexer Confidential and Proprietary Information 
+• The prioritization logic is deterministic and explainable (formula included in 
+documentation). 
+• Agent clearly distinguishes ERP facts vs calculated risk labels in the response. 
+• No transaction is created/updated in D365 as part of prioritization (insight 
+only). 
+PROC-02 – Overdue PO Impact Prioritization (Production Order Risk) 
+• User Story 
+As a Buyer, I want to see which overdue PO lines are blocking production 
+orders so that I can expedite the materials that will stop the shop floor. 
+• Expected Behavior 
+o For each overdue PO line item, agent retrieves dependent production 
+orders (or planned orders) and component requirements via 
+supported D365 entities (BOM/component demand) in the demo 
+dataset. 
+o Identifies the earliest production order start date impacted and 
+classifies risk based on “days late vs needed-on date”. 
+o Summarizes impacted work orders with basic context: production 
+order, item, planned start/finish, and whether alternative supply 
+exists (e.g., other open POs, available inventory). 
+o Provides suggested mitigations (insight only): expedite request, 
+partial delivery request, substitute/alternate item (if configured), or 
+resequence production order. 
+• Acceptance Criteria 
+o Uses only supported APIs/entities; no changes to D365 production setup 
+or data model. 
+o Risk logic is transparent (e.g., risk if Needed-on Date < Today + X or if 
+Days Late > threshold). 
+o Agent output includes traceability: which PO line is linked to which 
+production order/component requirement. 
+o No autonomous rescheduling or posting actions; recommendations only. 
+PROC-03 – Supplier Follow-Up Pack (Draft Outreach + Next Actions) 
+o User Story 
+As a Buyer, I want the agent to generate a supplier follow-up pack for the 
+10 
+Nexer Confidential and Proprietary Information 
+top overdue POs so that I can contact vendors with clear asks and 
+context. 
+o Expected Behavior 
+▪ Agent selects the top N overdue PO lines based on the 
+prioritization logic (e.g., inventory coverage or production 
+impact). 
+▪ Creates a structured “follow-up pack” per supplier: list of 
+impacted POs/lines, original due dates, days late, and requested 
+confirmation date. 
+▪ Generates a draft outreach message (email/Teams text) for the 
+Buyer to copy/send, including a clear ask: confirm ship date, 
+partial shipment option, or commit to revised delivery date. 
+▪ Optionally proposes internal next actions (e.g., prepare PO 
+change request, create expediting task) but requires explicit user 
+confirmation before any transactional action. 
+• Acceptance Criteria 
+o Draft outreach content is based on D365 facts already retrieved; 
+no vendor-contact automation is required. 
+o Any proposed PO changes remain draft only and require explicit 
+human approval before calling D365 write APIs. 
+o The agent stores (demo-grade) a log of generated follow-up 
+packs (who/when/which PO lines) outside D365 
+(Dataverse/Fabric), aligned with architecture rules. 
+PROC-04 – Overdue PO to Inbound Shipment ETA (Transportation Coordination) 
+• User Story 
+As a Buyer, I want to see whether an overdue PO is already in transit and 
+its latest ETA so that I can decide between expediting vs waiting. 
+• Expected Behavior 
+o Agent checks for related inbound shipments/loads for the PO 
+lines (based on available D365 shipment/receipt entities in the 
+demo) and retrieves latest known ship/ETA dates. 
+o If shipment tracking data is available (demo dataset), compares 
+ETA to need date and flags “ETA still too late” vs “in transit and 
+acceptable”. 
+11 
+Nexer Confidential and Proprietary Information 
+o Suggests transportation actions (insight only): expedite mode 
+change, partial shipment, alternative carrier, or escalate to 
+logistics coordinator. 
+• Acceptance Criteria 
+o Shipment/ETA data comes from supported sources in the demo 
+(D365 entities and/or Transportation Agent dataset); no custom 
+tables in D365. 
+o Where tracking data is missing, the agent clearly states the data 
+gap and falls back to the best available ERP dates (confirmed 
+delivery date, receipt forecast). 
+o Recommendations are non-executing; any changes to delivery 
+mode or dates are proposed as drafts only. 
+PROC-05 – Supplier Comparison 
+• User Story 
+As a Buyer, I want to compare suppliers for a specific item before creating a PO. 
+• Expected Behavior 
+• Agent retrieves vendor pricing and lead times. 
+• Applies simple comparison logic (price, delivery performance). 
+• Presents ranked recommendation. 
+• Acceptance Criteria 
+• Ranking logic clearly explainable. 
+• Data source referenced. 
+• No manual data uploads. 
+PROC-06 – Draft Purchase Order Creation 
+• User Story 
+As a Buyer, I want the agent to create a draft PO in D365 based on a 
+recommendation. 
+• Expected Behavior 
+• Agent validates: 
+o Vendor exists 
+o Item exists 
+o Quantity provided 
+• Creates draft PO via supported D365 API. 
+• Returns PO number or confirmation ID. 
+• Acceptance Criteria 
+• Draft created only (not confirmed order). 
+• Duplicate prevention logic present. 
+• Error handling demonstrated (invalid vendor test case). 
+12 
+Nexer Confidential and Proprietary Information 
+• No ERP customization required. 

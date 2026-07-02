@@ -1,0 +1,34 @@
+
+agent-framework-core==1.8.0
+agent-framework-foundry==1.8.0
+
+# Azure Functions runtime + Durable Functions (approval lifecycle)
+azure-functions==1.24.0
+azure-functions-durable==1.5.0
+ 
+# Azure auth
+azure-identity==1.25.3
+
+# Dynamic runtime configuration
+azure-appconfiguration>=1.7
+#Cosmos DB 
+azure-cosmos>=4.7.0
+ 
+# D365 Finance & Operations OData integration (HTTP client)
+requests>=2.32
+ 
+# Data contracts
+pydantic>=2.7
+ 
+# Local dev API server (scripts/dev_api_server.py) — not needed in the Functions deployment
+fastapi>=0.111
+uvicorn>=0.30
+
+
+azure-data-tables>=12.5.0
+
+
+azure-search-documents
+
+# Embeddings for procurement policy hybrid (vector + keyword) search
+openai>=1.40

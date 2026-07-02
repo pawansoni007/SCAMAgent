@@ -1,0 +1,37 @@
+{
+  "agent_id": "scm-procurement-exception-agent",
+  "contract_version": "1.0.0",
+  "description": "Tool/API Contract — the agent can only use tools defined here. It cannot connect directly to ERP systems or dynamically create integrations.",
+  "tools": [
+    { "name": "getInventoryStatus",      "purpose": "Retrieve inventory levels and stock position", "permission": "allowed",     "retries": 2 },
+    { "name": "listInventoryStatus",     "purpose": "Retrieve stock position of all items (coverage overview)", "permission": "allowed", "retries": 2 },
+    { "name": "getSafetyStock",          "purpose": "Retrieve safety stock thresholds",             "permission": "allowed",     "retries": 2 },
+    { "name": "getDemandForecast",       "purpose": "Retrieve demand and forecast information",     "permission": "allowed",     "retries": 2 },
+    { "name": "getApprovedSuppliers",    "purpose": "Retrieve approved supplier list",              "permission": "allowed",     "retries": 2 },
+    { "name": "getSupplierPerformance",  "purpose": "Retrieve reliability and risk metrics",        "permission": "allowed",     "retries": 2 },
+    { "name": "getLeadTimeData",         "purpose": "Retrieve delivery lead time",                  "permission": "allowed",     "retries": 2 },
+    { "name": "getSupplierPrices",       "purpose": "Retrieve supplier pricing",                    "permission": "allowed",     "retries": 2 },
+    { "name": "getOpenPurchaseOrders",   "purpose": "Retrieve open purchase orders",                "permission": "allowed",     "retries": 2 },
+    { "name": "getProcurementPolicies",  "purpose": "Retrieve relevant policy context",             "permission": "allowed",     "retries": 2 },
+    { "name": "createPurchaseOrderDraft","purpose": "Create draft after human approval",            "permission": "restricted",  "retries": 0 },
+    { "name": "writeAuditLog",           "purpose": "Store reasoning and decision trace",           "permission": "required",    "retries": 3 }
+  ],
+  "prohibited_tools": [
+    { "name": "executePurchaseOrder",      "reason": "Execute purchase order in ERP — not allowed" },
+    { "name": "approvePurchaseOrder",      "reason": "Approve purchase order — not allowed" },
+    { "name": "createSupplier",            "reason": "Create new supplier record — not allowed" },
+    { "name": "changeSupplierMasterData",  "reason": "Modify supplier records — not allowed" }
+  ],
+  "fallback_behavior": {
+    "missing_inventory_data": "Escalate and request data validation",
+    "supplier_api_unavailable": "Retry, then escalate",
+    "no_approved_supplier_found": "Block recommendation and escalate",
+    "low_confidence_score": "Escalate to human review",
+    "conflicting_rules": "Block recommendation and explain conflict",
+    "invalid_input": "Reject request with validation message",
+    "llm_output_invalid": "Retry with validation prompt or block",
+    "policy_document_unavailable": "Use configured hard rules and flag limited context",
+    "erp_api_unavailable": "Store approved decision and retry later",
+    "tool_timeout": "Retry according to policy and log failure"
+  }
+}

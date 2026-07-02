@@ -1,0 +1,19 @@
+{
+  "agent_id": "scm-procurement-exception-agent",
+  "package_version": "1.0.0",
+  "model": "gpt-4o",
+  "status": "approved",
+  "environment": "dev",
+  "approved_by": "AI Engineering Team",
+  "approved_on": "2026-06-10",
+  "prompt_files": {
+    "system": "system.md",
+    "context": "context.md",
+    "rules": "rules.md",
+    "reasoning": "reasoning.md",
+    "validation": "validation.md",
+    "explanation": "explanation.md",
+    "output": "output.md"
+  },
+  "notes": "Prompt package for the Procurement Exception Agent. Covers the governance prompt types: System, Context, Rules, Reasoning, Validation, Explanation and Output. The Context file defines how runtime ScmEvent context is interpreted; dynamic values are injected at runtime. Rules, reasoning and validation prompts contain tenant-config placeholders (e.g. {min_supplier_reliability}) resolved at load time."
+}

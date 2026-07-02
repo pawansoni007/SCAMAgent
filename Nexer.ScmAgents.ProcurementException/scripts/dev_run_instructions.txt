@@ -1,0 +1,27 @@
+Option A — Azure Functions host (includes Durable approval lifecycle)
+  Terminal 1 — storage emulator (required by Durable Functions):
+    npx azurite --silent --location %TEMP%\azurite
+  Terminal 2 — Functions host:
+    cd c:\development\SCMAgentsPack\Nexer.ScmAgents.ProcurementException
+    .venv\Scripts\Activate.ps1      # REQUIRED: func uses the active venv's Python.
+    powershell -File scripts\ensure_func_worker_compat.ps1   # one-time Core Tools patch (Py 3.12)
+    az login                         # provides AzureCliCredential for Foundry
+    func start
+  You should see the host listening on http://localhost:7071/
+
+  If func start fails with "'_SixMetaPathImporter' object has no attribute '_path'",
+  the venv is NOT active and func fell back to the bare global Python. Activate
+  the venv (see above) so the worker uses .venv (which has all dependencies).
+
+Option B — FastAPI dev server (lightweight, no Durable orchestration)
+  cd c:\development\SCMAgentsPack\Nexer.ScmAgents.ProcurementException
+  az login
+  .venv\Scripts\python.exe scripts\dev_api_server.py
+  You should see: Dev API listening on http://127.0.0.1:7071/
+
+Note: run only ONE of the two (both bind port 7071).
+
+React UI (either option)
+  cd c:\development\SCMAgentsPack\Nexer.ScmAgents.ProcurementException.Web
+  npm run dev
+  Open: http://localhost:5173

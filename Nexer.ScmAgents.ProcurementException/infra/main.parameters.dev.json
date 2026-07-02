@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": {
+      "value": "scmagents"
+    },
+    "environmentName": {
+      "value": "dev"
+    },
+    "staticWebAppLocation": {
+      "value": "westeurope"
+    },
+    "useExistingFoundry": {
+      "value": true
+    },
+    "existingFoundryProjectEndpoint": {
+      "value": "https://scm-azure-foundry-dev.services.ai.azure.com/api/projects/scm-agent-dev"
+    },
+    "foundryModelName": {
+      "value": "gpt-4o"
+    },
+    "foundryModelVersion": {
+      "value": "2024-11-20"
+    },
+    "foundryModelCapacity": {
+      "value": 50
+    },
+    "linkStaticWebAppBackend": {
+      "value": true
+    }
+  }
+}

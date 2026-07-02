@@ -1,0 +1,73 @@
+{
+  "agent_name": "Procurement Exception Agent",
+  "agent_id": "scm-procurement-exception-agent",
+  "domain": "Supply Chain Management",
+  "business_capability": "Procurement Exception Management",
+  "agent_type": "Task-based AI Agent",
+  "deployment_model": "Multi-tenant SaaS-ready",
+  "primary_users": [
+    "Buyers",
+    "Procurement Analysts",
+    "Supply Chain Planners",
+    "Procurement Managers"
+  ],
+  "owner": "AI Engineering Team / SCM Business Team",
+  "status": "Draft",
+  "version": "1.0.0",
+  "operating_principle": "The agent does not make the final business decision. It provides decision support and escalates the final choice to a human user.",
+  "in_scope": [
+    "Overdue purchase orders",
+    "Supplier delays",
+    "Urgent replenishment",
+    "Blocked purchase orders",
+    "Supplier risk scenarios",
+    "Procurement prioritization",
+    "Alternative supplier recommendation",
+    "Expedite recommendation",
+    "Purchase order draft recommendation",
+    "Escalation recommendation",
+    "Risk explanation",
+    "Operational trade-off analysis"
+  ],
+  "out_of_scope": [
+    "Direct ERP execution",
+    "Purchase approval",
+    "Supplier creation",
+    "Financial approval",
+    "Autonomous purchasing",
+    "Procurement policy override",
+    "Approval workflow bypass",
+    "Non-approved supplier recommendation when blocked by policy",
+    "Master data changes",
+    "Supplier contract modification",
+    "Payment-related decisions"
+  ],
+  "trigger_events": [
+    { "event": "overdue_purchase_order", "severity": "high",          "source": "ERP / Procurement API" },
+    { "event": "supplier_delay",         "severity": "medium-high",   "source": "Supplier API / ERP" },
+    { "event": "blocked_purchase_order", "severity": "high",          "source": "ERP / Procurement API" },
+    { "event": "lead_time_deviation",    "severity": "medium",        "source": "Procurement API" },
+    { "event": "supplier_risk_alert",    "severity": "medium",        "source": "Supplier Performance API" },
+    { "event": "procurement_exception",  "severity": "high",          "source": "ERP / Procurement API" }
+  ],
+  "out_of_scope_events_note": "Inventory events (stockout risk, item shortage) belong to the Inventory Agent; demand events (demand spike) belong to the Demand Planning Agent.",
+  "required_inputs": [
+    { "input": "tenant_id",            "required": true },
+    { "input": "item_id",              "required": true },
+    { "input": "plant",                "required": true },
+    { "input": "inventory_levels",     "required": true },
+    { "input": "safety_stock",         "required": true },
+    { "input": "demand_forecast",      "required": false },
+    { "input": "approved_suppliers",   "required": true },
+    { "input": "supplier_performance", "required": true },
+    { "input": "lead_time",            "required": true },
+    { "input": "pricing",              "required": false },
+    { "input": "open_purchase_orders", "required": false },
+    { "input": "procurement_policies", "required": true },
+    { "input": "tenant_rules",         "required": true },
+    { "input": "approval_policy",      "required": true }
+  ],
+  "expected_output": "Structured Top 3 recommendation response including rank, action, supplier ID when applicable, reason, risk level, confidence, applied policy constraints, expected operational impact, human approval flag and fallback status.",
+  "prompt_package_version": "1.0.0",
+  "tool_contract_version": "1.0.0"
+}

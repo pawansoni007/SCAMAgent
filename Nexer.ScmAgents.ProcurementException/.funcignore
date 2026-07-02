@@ -1,0 +1,9 @@
+.venv/
+.git/
+Blueprint/
+scripts/
+__pycache__/
+local.settings.json
+infra/
+pipelines/
+DeploymentGuide/
