@@ -68,7 +68,12 @@ def _tracked_tool(func):
 # ---------------------------------------------------------------------------
 
 def getInventoryStatus(item_id: str) -> str:
-    """Retrieve current inventory levels and stock position for an item.
+    """Retrieve current inventory levels and stock position for ONE specific item.
+
+    Use when the question names a single item (current stock, availability,
+    below safety stock?). Do NOT use for portfolio-wide questions where no
+    item ID is given, and do NOT use for configured safety-stock/reorder
+    parameters (that is getSafetyStock).
 
     Args:
         item_id: The item or material identifier.
@@ -92,7 +97,8 @@ def listInventoryStatus() -> str:
     """Retrieve the stock position of ALL items at once.
 
     Use this to find items below safety stock or to give an inventory overview
-    when no specific item ID was provided.
+    when no specific item ID was provided. Do NOT use when the buyer names a
+    specific item — use getInventoryStatus(item_id) for that.
 
     Returns:
         JSON list of all items with available_qty, safety_stock,
@@ -114,6 +120,10 @@ def listInventoryStatus() -> str:
 
 def getSafetyStock(item_id: str) -> str:
     """Retrieve safety stock thresholds and reorder parameters for an item.
+
+    Use for CONFIGURED planning parameters (safety stock threshold, reorder
+    point, max stock). Do NOT use for the current stock level or whether the
+    item is below safety stock right now — that is getInventoryStatus.
 
     Args:
         item_id: The item or material identifier.
@@ -156,7 +166,12 @@ def getDemandForecast(item_id: str) -> str:
 
 
 def getApprovedSuppliers() -> str:
-    """Retrieve the full approved vendor list for procurement decisions.
+    """Retrieve the GLOBAL approved vendor list (all suppliers, all items).
+
+    Use ONLY when no specific item is in scope (e.g. "show me the approved
+    vendor list"). When the question concerns suppliers for a specific item,
+    use getApprovedSuppliersForItem(item_id) instead; when it concerns one
+    known supplier's performance, use getSupplierPerformance(supplier_id).
 
     Returns:
         JSON list of all approved suppliers with reliability, risk, and lead time.
@@ -214,7 +229,12 @@ def getApprovedSuppliersForItem(item_id: str) -> str:
 
 
 def getSupplierPerformance(supplier_id: str) -> str:
-    """Retrieve reliability score, risk rating, and approval status for a supplier.
+    """Retrieve reliability score, risk rating, and approval status for ONE supplier.
+
+    Use when the buyer asks about a specific, named supplier ("how reliable is
+    SUP-200?"). Do NOT use to find or compare suppliers for an item (use
+    getApprovedSuppliersForItem), and do NOT use for supplier-item delivery
+    lead times (use getLeadTimeData).
 
     Args:
         supplier_id: The supplier identifier.
@@ -237,6 +257,11 @@ def getSupplierPerformance(supplier_id: str) -> str:
 
 def getLeadTimeData(supplier_id: str, item_id: str) -> str:
     """Retrieve delivery lead time data for a supplier-item combination.
+
+    This is the authoritative source for lead-time questions when both a
+    supplier and an item are known (standard vs expedited, last actual,
+    on-time rate). Prefer it over the coarse per-supplier lead_time_days
+    summary returned by supplier-list tools.
 
     Args:
         supplier_id: The supplier identifier.
@@ -291,6 +316,12 @@ def getSupplierPrices(supplier_id: str, item_id: str) -> str:
 def getOpenPurchaseOrders(item_id: str) -> str:
     """Retrieve all open or in-progress purchase orders for an item.
 
+    Use for questions about pending/incoming orders regardless of lateness
+    ("are there open POs for X?", "what is already on order?"). Do NOT use
+    when the buyer asks specifically about OVERDUE orders (use
+    getOverduePurchaseOrders) or which orders are most critical (use
+    getOverduePOCoverageRisk).
+
     Args:
         item_id: The item or material identifier.
 
@@ -328,7 +359,12 @@ def getOpenPurchaseOrders(item_id: str) -> str:
 def getOverduePurchaseOrders(item_id: str | None = None,
                              page: int = 1,
                              page_size: int = 25,) -> str:
-    """Retrieve calculated-overdue purchase orders.
+    """Retrieve calculated-overdue purchase orders (a plain listing).
+
+    Use when the buyer asks WHICH purchase orders are overdue — with or
+    without an item filter. Do NOT use when the buyer asks which overdue POs
+    are most critical, what to act on first, or about inventory coverage /
+    runout impact — that ranking comes from getOverduePOCoverageRisk.
 
     Overdue is calculated from receipt facts, not from the source ERP status:
 
@@ -411,7 +447,11 @@ def getOverduePurchaseOrders(item_id: str | None = None,
 def getOverduePOCoverageRisk(item_id: str, tenant_id: str = "nexer-demo") -> str:
     """Rank overdue purchase orders by deterministic inventory coverage risk.
 
-    Use for PROC-01 / overdue PO prioritization questions. This tool composes
+    Use for PROC-01 / overdue PO prioritization questions: which overdue POs
+    are most critical, what to act on first, expedite-vs-wait decisions, and
+    how late deliveries affect inventory coverage or projected runout for an
+    item. Do NOT use for a plain "which POs are overdue" listing (that is
+    getOverduePurchaseOrders). This tool composes
     approved services only: open purchase orders, product receipt facts,
     inventory status and demand data. It calculates receipt status, days late,
     open demand, days of cover, projected runout date, risk level, risk_score

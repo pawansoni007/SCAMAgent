@@ -48,7 +48,34 @@ conversation_title_service = (
 
 _orchestrators: dict = {}
 _chat_agents: dict = {}
-_chat_sessions: dict = {}
+
+# conversation_id -> AgentSession. The session's history provider keeps the
+# structured message list (including tool calls/results), which the flat
+# text transcript persisted in Cosmos cannot represent. Memory-only: on a
+# cold start or eviction the chat route falls back to seeding a fresh
+# session from the persisted transcript.
+from collections import OrderedDict
+
+_chat_sessions: "OrderedDict[str, object]" = OrderedDict()
+_CHAT_SESSION_CACHE_MAX = 200
+
+
+def _get_cached_chat_session(conversation_id: str):
+    session = _chat_sessions.get(conversation_id)
+    if session is not None:
+        _chat_sessions.move_to_end(conversation_id)
+    return session
+
+
+def _store_chat_session(conversation_id: str, session) -> None:
+    _chat_sessions[conversation_id] = session
+    _chat_sessions.move_to_end(conversation_id)
+    while len(_chat_sessions) > _CHAT_SESSION_CACHE_MAX:
+        _chat_sessions.popitem(last=False)
+
+
+def _drop_chat_session(conversation_id: str) -> None:
+    _chat_sessions.pop(conversation_id, None)
 
 # ---------------------------------------------------------------------------
 # Table Storage helpers
@@ -565,9 +592,30 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
             conversation.id,
         )
 
-    prompt = chat_history_service.build_agent_prompt(
-        conversation,
-    )
+    session = _get_cached_chat_session(conversation.id)
+    session_resumed = session is not None
+
+    if session_resumed:
+        # The session already holds the structured history, including prior
+        # tool calls and results — send only the newest buyer message.
+        prompt = text
+        pending_action = (
+            chat_history_service.pending_action_for_latest_message(
+                conversation,
+            )
+        )
+        if pending_action:
+            prompt = (
+                f"{text}\n\n"
+                f"{chat_history_service.pending_action_instruction(pending_action)}"
+            )
+    else:
+        # New conversation, cold start, or cache eviction: seed a fresh
+        # session with the persisted transcript (flat text fallback).
+        session = agent.create_session()
+        prompt = chat_history_service.build_agent_prompt(
+            conversation,
+        )
 
     trace_token = None
     debug_calls = []
@@ -579,16 +627,20 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(
             "Calling buyer chat agent "
             "(tenant_id=%s, conversation_id=%s, prompt_chars=%s, "
+            "session_resumed=%s, "
             "foundry_project_endpoint=%s, foundry_model=%s)",
             tenant_id,
             conversation.id,
             len(prompt or ""),
+            session_resumed,
             PROJECT_ENDPOINT,
             MODEL,
         )
-        reply = await agent.chat_with_prompt(
+        reply = await agent.chat(
             prompt,
+            session,
         )
+        _store_chat_session(conversation.id, session)
         logging.info(
             "Buyer chat agent completed "
             "(tenant_id=%s, conversation_id=%s, reply_chars=%s)",
@@ -597,6 +649,9 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
             len(reply or ""),
         )
     except Exception as exc:
+        # A failed run can leave the in-memory session mid tool-call; drop it
+        # so the next turn reseeds from the persisted transcript instead.
+        _drop_chat_session(conversation.id)
         logging.exception(
             "Buyer chat agent failed "
             "(tenant_id=%s, conversation_id=%s, foundry_project_endpoint=%s, "
@@ -845,6 +900,8 @@ async def delete_conversation(
             "Conversation not found.",
             404,
         )
+
+    _drop_chat_session(conversation_id)
 
     return _json(
         {

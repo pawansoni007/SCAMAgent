@@ -306,6 +306,19 @@ class ChatHistoryService:
 
         return (
             f"{prompt}\n\n"
+            f"{self.pending_action_instruction(pending_action)}"
+        )
+
+    @staticmethod
+    def pending_action_instruction(
+        pending_action: PendingAction,
+    ) -> str:
+        """
+        Internal system instruction that resolves a short confirmation
+        ("yes", "next") against the pending assistant action.
+        """
+
+        return (
             "System: The latest buyer message confirms or continues the pending "
             "assistant action below. Execute that pending action now using the "
             "appropriate available tool(s) and the same context/filters from "

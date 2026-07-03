@@ -68,6 +68,10 @@ class BuyerChatAgent:
             ),
             instructions=instructions,
             tools=BUYER_CHAT_TOOLS,
+            # Deterministic sampling: tool selection must not vary between
+            # identical requests, and prompt changes must be evaluable
+            # against a stable baseline (scripts/tool_selection_eval.py).
+            default_options={"temperature": 0.0, "top_p": 1.0},
         )
 
     def create_session(self) -> AgentSession:
