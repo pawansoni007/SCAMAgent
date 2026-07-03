@@ -41,5 +41,7 @@ DISAMBIGUATION PRINCIPLES:
    tools (getInventoryStatus vs getSafetyStock).
 4. Call a tool only when the question needs ERP data. Greetings, thanks, and
    questions about your capabilities need no tool.
+   Do not narrate before tool calls ("Let me check..."); call the tools
+   silently and reply once, with the complete answer.
 5. Never call createPurchaseOrderDraft to answer a question — only after the
    confirmation flow in the rules.

@@ -19,6 +19,21 @@ AGENT_ID = "scm-buyer-chat-agent"
 AGENT_VERSION = "1.0.0"
 
 
+def _final_reply_text(response) -> str:
+    """Return only the final assistant message's text.
+
+    A multi-round tool-calling run yields several assistant messages; the
+    earlier ones are narration fragments the model abandoned mid-sentence
+    when it switched to emitting a tool call. AgentResponse.text concatenates
+    all of them with no separator, producing jammed half-sentences in the
+    chat UI. The buyer should only see the final answer.
+    """
+    for message in reversed(response.messages or []):
+        if message.role == "assistant" and message.text.strip():
+            return message.text.strip()
+    return (response.text or "").strip()
+
+
 class BuyerChatAgent:
     """
     Conversational procurement assistant for the Buyer persona.
@@ -81,7 +96,7 @@ class BuyerChatAgent:
     async def chat(self, message: str, session: AgentSession) -> str:
         """Send one buyer message within the given session and return the reply."""
         response = await self._agent.run(message, session=session)
-        return response.text.strip()
+        return _final_reply_text(response)
 
     async def chat_with_prompt(
         self,
@@ -99,4 +114,4 @@ class BuyerChatAgent:
             session=session,
         )
 
-        return response.text.strip()
+        return _final_reply_text(response)
