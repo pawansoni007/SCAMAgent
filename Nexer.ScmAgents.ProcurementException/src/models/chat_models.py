@@ -107,6 +107,15 @@ class Conversation(BaseModel):
         description="Pending action awaiting buyer confirmation or continuation",
     )
 
+    agent_session_state: dict | None = Field(
+        default=None,
+        description=(
+            "Serialized AgentSession (AgentSession.to_dict) so chat "
+            "continuity, including tool calls/results, survives instance "
+            "recycling on Consumption/Flex plans"
+        ),
+    )
+
 
 class ConversationSummary(BaseModel):
     """

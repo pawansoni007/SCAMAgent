@@ -93,6 +93,15 @@ class BuyerChatAgent:
         """Start a new conversation (in-memory history provider)."""
         return self._agent.create_session()
 
+    @staticmethod
+    def restore_session(state: dict) -> AgentSession:
+        """
+        Rehydrate a session from a previously persisted AgentSession.to_dict()
+        payload, restoring the structured history (tool calls/results) that a
+        flat text transcript cannot carry.
+        """
+        return AgentSession.from_dict(state)
+
     async def chat(self, message: str, session: AgentSession) -> str:
         """Send one buyer message within the given session and return the reply."""
         response = await self._agent.run(message, session=session)

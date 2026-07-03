@@ -376,6 +376,31 @@ class ChatHistoryService:
             conversation
         )
     
+    def save_agent_session_state(
+        self,
+        conversation_id: str,
+        user_id: str,
+        state: dict | None,
+    ) -> Conversation | None:
+        """
+        Persist the serialized AgentSession on the conversation document so
+        continuity survives function-host restarts and scale-to-zero.
+        """
+
+        conversation = self.get_conversation(
+            conversation_id,
+            user_id,
+        )
+
+        if not conversation:
+            return None
+
+        conversation.agent_session_state = state
+
+        return self._repository.save_conversation(
+            conversation
+        )
+
     def append_user_message(
         self,
         conversation_id: str,

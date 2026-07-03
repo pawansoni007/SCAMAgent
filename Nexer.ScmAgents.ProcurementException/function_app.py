@@ -77,6 +77,26 @@ def _store_chat_session(conversation_id: str, session) -> None:
 def _drop_chat_session(conversation_id: str) -> None:
     _chat_sessions.pop(conversation_id, None)
 
+
+_SESSION_STATE_MAX_MESSAGES = 40
+
+
+def _trimmed_session_state(session) -> dict:
+    """
+    Serialize a session for persistence, keeping only a bounded tail of
+    messages. The cut advances to the next user message so a function_call
+    is never separated from its function_result, and the Cosmos document
+    stays well under the 2 MB item limit.
+    """
+    state = session.to_dict()
+    messages = (state.get("state") or {}).get("messages") or []
+    if len(messages) > _SESSION_STATE_MAX_MESSAGES:
+        start = len(messages) - _SESSION_STATE_MAX_MESSAGES
+        while start < len(messages) and messages[start].get("role") != "user":
+            start += 1
+        state["state"]["messages"] = messages[start:]
+    return state
+
 # ---------------------------------------------------------------------------
 # Table Storage helpers
 # ---------------------------------------------------------------------------
@@ -592,10 +612,27 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
             conversation.id,
         )
 
+    # Session resolution: warm in-memory cache first, then the state
+    # persisted in Cosmos (survives instance recycling on Consumption/Flex
+    # plans), then a fresh session seeded from the flat transcript.
     session = _get_cached_chat_session(conversation.id)
-    session_resumed = session is not None
+    session_source = "memory" if session is not None else None
 
-    if session_resumed:
+    if session is None and conversation.agent_session_state:
+        try:
+            session = agent.restore_session(
+                conversation.agent_session_state,
+            )
+            session_source = "cosmos"
+        except Exception:
+            logging.warning(
+                "Failed to restore persisted agent session; falling back "
+                "to transcript seeding (conversation_id=%s)",
+                conversation.id,
+                exc_info=True,
+            )
+
+    if session is not None:
         # The session already holds the structured history, including prior
         # tool calls and results — send only the newest buyer message.
         prompt = text
@@ -610,9 +647,10 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
                 f"{chat_history_service.pending_action_instruction(pending_action)}"
             )
     else:
-        # New conversation, cold start, or cache eviction: seed a fresh
-        # session with the persisted transcript (flat text fallback).
+        # New conversation, or no usable prior state: seed a fresh session
+        # with the persisted transcript (flat text fallback).
         session = agent.create_session()
+        session_source = "transcript"
         prompt = chat_history_service.build_agent_prompt(
             conversation,
         )
@@ -627,12 +665,12 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(
             "Calling buyer chat agent "
             "(tenant_id=%s, conversation_id=%s, prompt_chars=%s, "
-            "session_resumed=%s, "
+            "session_source=%s, "
             "foundry_project_endpoint=%s, foundry_model=%s)",
             tenant_id,
             conversation.id,
             len(prompt or ""),
-            session_resumed,
+            session_source,
             PROJECT_ENDPOINT,
             MODEL,
         )
@@ -641,6 +679,21 @@ async def chat(req: func.HttpRequest) -> func.HttpResponse:
             session,
         )
         _store_chat_session(conversation.id, session)
+        try:
+            chat_history_service.save_agent_session_state(
+                conversation.id,
+                user_id,
+                _trimmed_session_state(session),
+            )
+        except Exception:
+            # Persistence is best-effort: a failed save only means the next
+            # cold start falls back to transcript seeding.
+            logging.warning(
+                "Failed to persist agent session state "
+                "(conversation_id=%s)",
+                conversation.id,
+                exc_info=True,
+            )
         logging.info(
             "Buyer chat agent completed "
             "(tenant_id=%s, conversation_id=%s, reply_chars=%s)",
