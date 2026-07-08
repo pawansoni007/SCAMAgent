@@ -214,6 +214,7 @@ class ChatRepository:
                 if conversation.pending_action
                 else None
             ),
+            "agentSessionState": conversation.agent_session_state,
         }
 
     def _from_document(
@@ -238,4 +239,5 @@ class ChatRepository:
                 )
             ],
             pending_action=document.get("pendingAction"),
+            agent_session_state=document.get("agentSessionState"),
         )

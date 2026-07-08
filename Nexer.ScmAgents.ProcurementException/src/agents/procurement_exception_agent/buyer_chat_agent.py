@@ -19,6 +19,21 @@ AGENT_ID = "scm-buyer-chat-agent"
 AGENT_VERSION = "1.0.0"
 
 
+def _final_reply_text(response) -> str:
+    """Return only the final assistant message's text.
+
+    A multi-round tool-calling run yields several assistant messages; the
+    earlier ones are narration fragments the model abandoned mid-sentence
+    when it switched to emitting a tool call. AgentResponse.text concatenates
+    all of them with no separator, producing jammed half-sentences in the
+    chat UI. The buyer should only see the final answer.
+    """
+    for message in reversed(response.messages or []):
+        if message.role == "assistant" and message.text.strip():
+            return message.text.strip()
+    return (response.text or "").strip()
+
+
 class BuyerChatAgent:
     """
     Conversational procurement assistant for the Buyer persona.
@@ -68,16 +83,29 @@ class BuyerChatAgent:
             ),
             instructions=instructions,
             tools=BUYER_CHAT_TOOLS,
+            # Deterministic sampling: tool selection must not vary between
+            # identical requests, and prompt changes must be evaluable
+            # against a stable baseline (scripts/tool_selection_eval.py).
+            default_options={"temperature": 0.0, "top_p": 1.0},
         )
 
     def create_session(self) -> AgentSession:
         """Start a new conversation (in-memory history provider)."""
         return self._agent.create_session()
 
+    @staticmethod
+    def restore_session(state: dict) -> AgentSession:
+        """
+        Rehydrate a session from a previously persisted AgentSession.to_dict()
+        payload, restoring the structured history (tool calls/results) that a
+        flat text transcript cannot carry.
+        """
+        return AgentSession.from_dict(state)
+
     async def chat(self, message: str, session: AgentSession) -> str:
         """Send one buyer message within the given session and return the reply."""
         response = await self._agent.run(message, session=session)
-        return response.text.strip()
+        return _final_reply_text(response)
 
     async def chat_with_prompt(
         self,
@@ -95,4 +123,4 @@ class BuyerChatAgent:
             session=session,
         )
 
-        return response.text.strip()
+        return _final_reply_text(response)
